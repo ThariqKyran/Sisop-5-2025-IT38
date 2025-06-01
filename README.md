@@ -2,10 +2,11 @@
 
 ## Kelompok
 
-Nama | NRP
---- | ---
-Amoes Noland | 5027231028
-Rafi' Afnaan Fathurrahman | 5027231040
+| Nama                      | NRP        |
+|---------------------------|------------|
+|Muhammad Hikari Reiziq R.  | 5027241079 |
+|Dira Muhammad Ilyas S. A.  | 5027241033 |
+|Thariq Kyran Aryunaldi     | 5027241073 |
 
 ## Daftar Isi
 
