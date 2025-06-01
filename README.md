@@ -4,7 +4,7 @@
 
 | Nama                      | NRP        |
 |---------------------------|------------|
-|Muhammad Hikari Reiziq R.  | 5027241079 |
+|M. Hikari Reiziq R.        | 5027241079 |
 |Dira Muhammad Ilyas S. A.  | 5027241033 |
 |Thariq Kyran Aryunaldi     | 5027241073 |
 
