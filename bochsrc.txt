@@ -106,7 +106,7 @@ vga: extension=vbe
 # only. In that case the size must match one of the supported types.
 #=======================================================================
 # Nama image sistem operasi yang akan digunakan bochs
-floppya: 1_44=bin/floppy.img, status=inserted
+floppya: 1_44=/home/reiziqzip/modul5/Sisop-5-2025-IT38/bin/floppy.img, status=inserted
 
 #=======================================================================
 # BOOT:
