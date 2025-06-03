@@ -180,4 +180,4 @@ https://github.com/user-attachments/assets/1cfa66b1-b2f5-4e3e-a4b2-ec8b012f6fbb
 
 ## Laporan
 
-> Isi sesuai pengerjaan.
+Tidak dapat menampilkan GUI Bochs setelah melakukan bochs -f bochsrc.txt. Dari WSL maupun aplikasi bochs-2.8 di windows
