@@ -180,4 +180,415 @@ https://github.com/user-attachments/assets/1cfa66b1-b2f5-4e3e-a4b2-ec8b012f6fbb
 
 ## Laporan
 
-Tidak dapat menampilkan GUI Bochs setelah melakukan bochs -f bochsrc.txt. Dari WSL maupun aplikasi bochs-2.8 di windows
+Berikut penjelasan **struktur folder dan file** serta **fungsi setiap file penting** dalam proyek sistem operasi
+
+---
+
+###  **Struktur Folder dan Fungsinya**
+
+| Folder/File | Fungsi |
+| --- | --- |
+| `src/` | Berisi source code utama sistem operasi (bootloader, kernel, shell). |
+| `include/` | Header file (`.h`) untuk mendeklarasikan fungsi dan struktur. |
+| `bin/` | Output hasil kompilasi seperti `.bin`, `.o`, dan `floppy.img`. |
+| `.vscode/` | Konfigurasi Visual Studio Code. |
+| `bochsrc.txt` | File konfigurasi untuk menjalankan OS dengan emulator Bochs. |
+| `makefile` | Instruksi otomatisasi build untuk menyusun seluruh bagian OS. |
+| `README.md` | Penjelasan proyek (biasanya). |
+| `.gitignore` | File/folder apa aja yang gak perlu disimpan di Git. |
+
+---
+
+###  `include/kernel.h`
+
+### 1. `kernel.h`
+
+- Fungsi: Deklarasi fungsi penting untuk **interaksi langsung dengan BIOS dan layar**.
+- Isi penting:
+    - `printString`, `readString`, `clearScreen`: Tampil, input, dan hapus layar.
+    - `interrupt`, `putInMemory`: Akses hardware langsung via interupsi ASM.
+
+---
+
+### 2. `std_lib.h`
+
+- Fungsi: Menyediakan **fungsi bantu** seperti string dan angka.
+- Isi penting:
+    - `strcmp`, `strcpy`: Banding dan salin string.
+    - `atoi`, `itoa`: Konversi antara string dan angka.
+    - `div`, `mod`: Operasi matematika dasar tanpa `/` dan `%`.
+
+---
+
+### 3. `std_type.h`
+
+- Fungsi: File ini berfungsi untuk mendefinisikan tipe data dasar agar sistem operasi yang kami buat bisa menggunakan tipe-tipe seperti `byte` dan `bool`, meskipun tidak menggunakan pustaka standar C
+- Isi penting:
+    - `byte`, `bool`, `true`, `false`: Biar coding lebih jelas dan konsisten.
+
+---
+
+### 4. `shell.h`
+
+- Fungsi: Deklarasi fungsi untuk **shell interaktif**.
+- Isi penting:
+    - `shell()`: Jalankan tampilan prompt OS.
+    - `parseCommand()`: Memisahkan input user jadi command dan argumen.
+
+---
+
+Berikut penjelasan **detail tapi singkat dan jelas** untuk dua file `.asm` yang ada di folder `src/`:
+
+---
+
+### 1. `bootloader.asm`
+
+### Fungsi:
+
+- File ini adalah **bootloader** 16-bit yang dijalankan pertama kali saat komputer menyala.
+- Tugasnya adalah **memuat file kernel ke dalam memori**, lalu menjalankannya.
+
+### Penjelasan Kode Penting:
+
+```
+KERNEL_SEGMENT equ 0x1000     ; Kernel dimuat di segment 0x1000
+KERNEL_SECTORS equ 15         ; Kernel maksimal 15 sektor
+KERNEL_START   equ 1          ; Kernel mulai dari sektor 1 (setelah bootloader)
+
+```
+
+```
+mov ax, KERNEL_SEGMENT
+mov es, ax
+mov bx, 0x0000
+
+```
+
+- Atur lokasi di memori (segment:offset) untuk kernel akan dimuat.
+
+```
+mov ah, 0x02          ; BIOS function: read sectors
+mov al, KERNEL_SECTORS
+...
+int 0x13              ; Jalankan BIOS untuk baca dari disket
+
+```
+
+- Membaca isi file kernel dari disket menggunakan interupsi BIOS `0x13`.
+
+```
+jmp KERNEL_SEGMENT:0x0000
+
+```
+
+- Melompat ke alamat kernel yang telah dimuat, dan menyerahkan kontrol ke kernel.
+
+```
+times 510-($-$$) db 0
+dw 0xAA55
+
+```
+
+- Padding untuk membuat file tepat 512 byte.
+- `0xAA55` adalah **signature** wajib agar dikenali sebagai bootable.
+
+---
+
+### 2. `kernel.asm`
+
+### Fungsi:
+
+- File ini berisi fungsi **interupsi dan BIOS helper** untuk kernel kami.
+- Semua fungsinya bisa dipanggil dari C menggunakan `extern`.
+
+### Penjelasan Kode Penting:
+
+```
+global _putInMemory
+global _interrupt
+global _getBiosTick
+
+```
+
+- Menyatakan bahwa fungsi-fungsi ini bisa digunakan di file `.c`.
+
+---
+
+### Fungsi: `getBiosTick()`
+
+```
+mov ah, 0x00
+int 0x1A          ; Memanggil BIOS RTC
+mov ax, dx
+mov dx, cx
+ret
+
+```
+
+- Mengambil waktu BIOS (jumlah tick sejak boot) dan mengembalikan ke C.
+
+---
+
+### Fungsi: `putInMemory(segment, address, character)`
+
+```
+mov ax,[bp+4]     ; segment
+mov si,[bp+6]     ; address
+mov cl,[bp+8]     ; character
+mov ds,ax
+mov [si],cl       ; tulis karakter ke alamat
+
+```
+
+- Menaruh karakter ke lokasi tertentu di memori (biasanya ke layar).
+
+---
+
+### Fungsi: `interrupt(number, AX, BX, CX, DX)`
+
+```
+mov [si+1],al     ; ubah nomor interupsi secara dinamis
+mov ax,[bp+6]
+mov bx,[bp+8]
+...
+int 0x00
+
+```
+
+- Memanggil interupsi dengan register yang ditentukan dari C.
+
+---
+
+Berikut penjelasan dari file src/file.c: 
+
+---
+
+### 1. `kernel.c`
+
+### Fungsi:
+
+Berisi fungsi dasar OS dan `main()` sebagai pintu masuk pertama setelah boot.
+
+### Isi penting:
+
+- `printString(char *str)`
+    
+    ➜ Cetak string ke layar pakai interupsi BIOS `INT 0x10`.
+    
+- `readString(char *buf)`
+    
+    ➜ Baca input user karakter demi karakter, tangani backspace dan enter.
+    
+- `clearScreen()`
+    
+    ➜ Bersihkan seluruh layar dan set kursor ke pojok kiri atas.
+    
+- `main()`
+    
+    ➜ Panggil `clearScreen()` dan lanjutkan ke `shell()`.
+    
+
+---
+
+### 2. `shell.c`
+
+### Fungsi:
+
+Berisi logika shell tempat user mengetik command dan mendapat respons.
+
+### Isi penting:
+
+- `shell()`
+    
+    ➜ Loop utama untuk baca input user, parsing command, dan jalankan perintah:
+    
+    - `user <nama>` → ubah nama pengguna.
+    - `grandcompany <nama>` → ubah suffix prompt (dan bisa dikaitkan ke warna).
+    - `add`, `sub`, `mul`, `div` → kalkulator.
+    - `yogurt` → balasan random dari array `responses`.
+    - Command tak dikenal akan diulang (The Echo).
+- `parseCommand(buf, cmd, arg)`
+    
+    ➜ Pisahkan input string ke command dan maksimal dua argumen.
+    
+
+---
+
+### 3. `std_lib.c`
+
+### Fungsi:
+
+Pustaka fungsi bantu untuk manipulasi string, angka, dan memori.
+
+### Isi penting:
+
+- `div(a, b)`, `mod(a, b)`
+    
+    ➜ Operasi pembagian dan modulus manual (tanpa `/` dan `%`).
+    
+- `strcmp(str1, str2)`
+    
+    ➜ Bandingkan dua string, `true` jika sama.
+    
+- `strcpy(dst, src)`
+    
+    ➜ Salin string dari `src` ke `dst`.
+    
+- `clear(buf, size)`
+    
+    ➜ Bersihkan buffer jadi semua nol (`0x00`).
+    
+- `atoi(str, &num)`
+    
+    ➜ Ubah string angka jadi integer (misal "123" → 123).
+    
+- `itoa(num, str)`
+    
+    ➜ Ubah integer ke string (misal -42 → "-42").
+    
+
+---
+
+Semua file ini bekerja sama:
+
+- `kernel.c` sebagai fondasi dan I/O dasar,
+- `shell.c` sebagai interaksi utama user,
+- `std_lib.c` sebagai alat bantu string dan hitung-hitungan.
+
+Siap, kak. Berikut penjelasan isi `makefile` dengan **bahasa sederhana**, jelas, dan mudah dimengerti:
+
+---
+
+### `makefile`
+
+`makefile` adalah file yang berisi **perintah otomatis** untuk menyusun sistem operasi kami. Jadi, kami cukup ketik:
+
+```bash
+make build
+```
+
+Semua langkah kompilasi akan dijalankan satu per satu **tanpa perlu ketik manual**.
+
+---
+
+###  Penjelasan Setiap Bagian `makefile`
+
+| Target / Baris | Fungsi |
+| --- | --- |
+| `BIN_DIR = binIMG = $(BIN_DIR)/floppy.img` | Menentukan folder hasil (`bin/`) dan nama file image (`floppy.img`) yang akan dijalankan. |
+| `.PHONY: ...` | Menandakan bahwa nama-nama target seperti `build`, `prepare` bukan nama file biasa. |
+
+---
+
+###  Target-target Penting
+
+| Target | Fungsi (dengan bahasa sederhana) |
+| --- | --- |
+| `build` | Jalankan semua langkah: mulai dari buat image, compile file, sampai hasil akhir. |
+| `prepare` | Buat folder `bin/` dan file `floppy.img` kosong sebesar 1.44MB. |
+| `bootloader` | Compile `bootloader.asm` jadi `bootloader.bin`, lalu taruh di sektor pertama `floppy.img`. |
+| `stdlib` | Compile `std_lib.c` jadi `std_lib.o`. Ini isi fungsi bantu seperti `strcpy`, `atoi`, dll. |
+| `kernel` | Compile `kernel.asm` dan `kernel.c` jadi file object (`.o`) yang bisa digabung. |
+| `shell` | Compile `shell.c` jadi `shell.o`, berisi logika command dari user. |
+| `link` | Gabungkan semua file `.o` jadi satu file `kernel.bin`, lalu simpan ke `floppy.img` setelah sektor pertama. |
+| `clean` | Hapus semua file hasil compile, supaya bisa mulai ulang dari awal. |
+
+---
+
+| Baris | Perintah |
+| --- | --- |
+| `romimage: file=$BXSHARE/BIOS-bochs-latest` | Mengatur BIOS yang digunakan Bochs (default bawaan Bochs). |
+| `cpu: count=1, ips=10000000, reset_on_triple_fault=1` | Jalankan 1 CPU, kecepatan 10 juta instruksi per detik, reset jika error fatal. |
+| `megs: 32` | RAM yang disimulasikan sebesar 32 MB. |
+| `vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest` | BIOS untuk tampilan VGA. |
+| `vga: extension=vbe` | Aktifkan dukungan tampilan VBE (VESA BIOS Extension). |
+| `floppya: 1_44=.../floppy.img, status=inserted` | Gunakan file `floppy.img` sebagai disket bootable 1.44MB. |
+| `boot: floppy` | Boot dari disket (`floppy.img`). |
+| `floppy_bootsig_check: disabled=0` | Aktifkan cek signature `0xAA55` di sektor boot (wajib agar bisa boot). |
+| `log: -` | Tulis log ke terminal (stdout). |
+| `panic: action=askerror: action=reportinfo: action=reportdebug: action=ignore` | Atur level log dan reaksi Bochs saat error/panic. |
+| `debugger_log: -` | Log debugger ditulis ke terminal (nonaktifkan file). |
+| `vga: update_freq=10` | Atur frekuensi refresh layar (lebih cepat = lebih responsif). |
+| `mouse: enabled=0` | Nonaktifkan mouse di emulator (tidak diperlukan untuk OS sederhana). |
+| `pci: enabled=1, chipset=i440fx` | Aktifkan chipset PCI (umumnya tidak berpengaruh untuk OS basic). |
+
+### Penjelasan File Hasil `make build`
+
+---
+
+###  Saat Komputer Dinyalakan
+
+1. Komputer nyalain dan baca disk (`floppy.img`)
+2. Jalankan `bootloader.bin` (tombol start)
+3. `bootloader` muat `kernel.bin` ke dalam memori
+4. `kernel` jalan, lalu hidupkan `shell`
+5. kami bisa ngetik command (kayak ngomong ke OS)
+6. OS ngerti karena punya alat bantu (`std_lib`)
+
+---
+
+Kalau kami suka cara ini, aku bisa lanjut bahas **kode OS-mu satu-satu** juga pakai bahasa bayi. Mau mulai dari `bootloader.asm`? 🍼🧠
+
+---
+
+###  Penjelasan File Hasil `make build`
+
+| File | Fungsi |
+| --- | --- |
+| `bootloader.bin` | Bootloader 512 byte, dieksekusi pertama oleh BIOS saat boot. |
+| `kernel_asm.o` | Object file hasil kompilasi dari `kernel.asm` (16-bit assembly). |
+| `kernel.o` | Object file hasil kompilasi `kernel.c`, berisi fungsi `main` kernel. |
+| `shell.o` | Object file hasil kompilasi `shell.c`, berisi logic command user. |
+| `std_lib.o` | Object file hasil kompilasi `std_lib.c`, berisi fungsi-fungsi utilitas. |
+| `kernel.bin` | File kernel final (gabungan `.o` di-link jadi 1 binary). |
+| `floppy.img` | Image 1.44MB yang berisi `bootloader.bin` + `kernel.bin`, disimulasikan BIOS. |
+
+---
+
+###  Urutan Kerja dari `make build`
+
+Saat kami jalankan `make build`, urutannya begini:
+
+1. **Buat floppy kosong**:
+    
+    `dd if=/dev/zero of=floppy.img bs=512 count=2880`
+    
+    → Membuat file disk 1.44MB (ukuran disket standar 512 × 2880 byte).
+    
+2. **Kompilasi `bootloader.asm` ke `bootloader.bin`**
+    
+    → Harus tepat 512 byte dan diakhiri dengan 0xAA55 agar bisa dibaca BIOS.
+    
+3. **Salin `bootloader.bin` ke sektor pertama `floppy.img`**
+    
+    `dd if=bootloader.bin of=floppy.img bs=512 count=1 conv=notrunc`
+    
+    → BIOS selalu baca sektor pertama saat boot, jadi bootloader harus di sini.
+    
+4. **Kompilasi file .asm dan .c menjadi .o:**
+    - `kernel.asm → kernel_asm.o`
+    - `kernel.c → kernel.o`
+    - `shell.c → shell.o`
+    - `std_lib.c → std_lib.o`
+5. **Linking semua `.o` file menjadi `kernel.bin`:**
+    
+    `ld86 -o kernel.bin -d kernel_asm.o kernel.o shell.o std_lib.o`
+    
+    → Menyatukan semua file menjadi 1 executable binary (`kernel.bin`).
+    
+6. **Salin `kernel.bin` ke sektor berikutnya dalam `floppy.img`**
+    
+    → Biasanya dilakukan di `bootloader.asm` dengan membaca sektor-sektor ke memori.
+    
+
+---
+
+### Ringkasan Eksekusi Saat Booting
+
+1. **BIOS** membaca `floppy.img`, mengeksekusi `bootloader.bin`.
+2. **Bootloader** akan membaca `kernel.bin` ke memori.
+3. **Kernel** menjalankan `main()` dari `kernel.c`.
+4. **Shell** dijalankan, pengguna bisa ketik command seperti `user`, `echo`, dsb.
+5. **Lib** (std_lib) membantu berbagai fungsi dasar seperti `putchar`, `strlen`, dsb.
+
+---
